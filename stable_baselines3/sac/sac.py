@@ -264,7 +264,14 @@ class SAC(OffPolicyAlgorithm):
             current_q_values = self.critic(replay_data.observations, replay_data.actions)
 
             # Compute critic loss
-            critic_loss = 0.5 * sum(F.mse_loss(current_q, target_q_values) for current_q in current_q_values)
+            per_sample_critic_loss = 0.5 * sum(
+                (current_q - target_q_values).pow(2) for current_q in current_q_values
+            )
+            critic_loss = (
+                per_sample_critic_loss.mean()
+                if replay_data.weights is None
+                else (per_sample_critic_loss * replay_data.weights).mean()
+            )
             assert isinstance(critic_loss, th.Tensor)  # for type checker
             critic_losses.append(critic_loss.item())  # type: ignore[union-attr]
 
@@ -272,6 +279,15 @@ class SAC(OffPolicyAlgorithm):
             self.critic.optimizer.zero_grad()
             critic_loss.backward()
             self.critic.optimizer.step()
+            if replay_data.indices is not None and hasattr(self.replay_buffer, "update_priorities"):
+                td_errors = 0.5 * sum(
+                    (current_q.detach() - target_q_values.detach()).abs()
+                    for current_q in current_q_values
+                )
+                self.replay_buffer.update_priorities(
+                    replay_data.indices.detach().cpu().numpy(),
+                    td_errors.detach().cpu().numpy(),
+                )
 
             # Compute actor loss
             # Alternative: actor_loss = th.mean(log_prob - qf1_pi)

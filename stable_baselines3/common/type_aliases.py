@@ -55,6 +55,8 @@ class ReplayBufferSamples(NamedTuple):
     rewards: th.Tensor
     # For n-step replay buffer
     discounts: th.Tensor | None = None
+    weights: th.Tensor | None = None
+    indices: th.Tensor | None = None
 
 
 class DictReplayBufferSamples(NamedTuple):
